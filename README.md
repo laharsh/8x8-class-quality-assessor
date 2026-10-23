@@ -51,7 +51,9 @@ OPENAI_BASE_URL = "https://openrouter.ai/api/v1"
 OPENAI_MODEL = "meta-llama/llama-3.1-8b-instruct:free"
 ```
 
-4. Deploy. Linux build installs **ffmpeg** from [`packages.txt`](packages.txt).
+4. Deploy. Linux build installs **ffmpeg** from [`packages.txt`](packages.txt). Python **3.12** via [`runtime.txt`](runtime.txt) (avoid 3.14 + PyAV 19 issues).
+
+If Whisper fails with `metadata_errors`, pull latest `main` (WAV is loaded via `soundfile`, not PyAV).
 
 ### Hosting requirements (honest)
 

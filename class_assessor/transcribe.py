@@ -3,6 +3,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
+import numpy as np
+import soundfile as sf
+
 from class_assessor.config import (
     TRANSCRIBE_FULL_IF_SHORTER_SEC,
     TRANSCRIBE_MID_DURATION_SEC,
@@ -37,6 +40,19 @@ def _fmt_mmss(sec: float) -> str:
     return f"{sec // 60}:{sec % 60:02d}"
 
 
+def _load_wav_mono_16k(wav_path: Path) -> Tuple[np.ndarray, float]:
+    """Load ffmpeg PCM wav — avoids PyAV in faster-whisper (PyAV 19 breaks on Streamlit)."""
+    data, sr = sf.read(str(wav_path), dtype="float32", always_2d=False)
+    if data.ndim > 1:
+        data = data.mean(axis=1)
+    if sr != 16000:
+        import librosa
+
+        data = librosa.resample(data, orig_sr=sr, target_sr=16000)
+    duration = float(len(data)) / 16000.0
+    return np.ascontiguousarray(data, dtype=np.float32), duration
+
+
 def transcribe_audio(
     wav_path: Path,
     *,
@@ -49,14 +65,16 @@ def transcribe_audio(
 ) -> List[TranscriptSegment]:
     name = model_name or WHISPER_MODEL
     model = _whisper_model(name)
+    audio, duration = _load_wav_mono_16k(wav_path)
     segments, info = model.transcribe(
-        str(wav_path),
+        audio,
         beam_size=WHISPER_BEAM_SIZE,
         vad_filter=True,
         condition_on_previous_text=False,
     )
     out: List[TranscriptSegment] = []
-    duration = getattr(info, "duration", None) or 0.0
+    if not duration:
+        duration = getattr(info, "duration", None) or 0.0
     base_frac = 0.30 + 0.40 * ((phase_index - 1) / max(1, phase_total))
     span_frac = 0.40 / max(1, phase_total)
 
